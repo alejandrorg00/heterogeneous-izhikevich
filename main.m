@@ -20,8 +20,8 @@
 close all; clear; clc;
 seed = 2024; 
 rng(seed);
-hFig = figure('Position', [100, 100, 1200, 800], 'Visible', 'off');
 c_date_time = datestr(clock,'YYYY-mm-dd_HH-MM');
+hFig = figure('Position', [100, 100, 1200, 800], 'Visible', 'off');
 
 %% Network definition
 
@@ -40,23 +40,31 @@ Ni = N - Ne; colorI = [0.6 0.8 1]; % 20% of neurons are inhibitory (blue)
 
 % Spiking types
 neuron_type_map = containers.Map(...
-    {'RS', 'IB', 'CH', 'FS', 'TH', 'LTS', 'RZ'}, ...
+    {'RS', 'IB', 'CH', 'FS', 'TH', 'LTS', 'RZ', 'AC'}, ...
     {[0.02 0.20 -65 2], ...    % REGULAR SPIKING - RS
      [0.02 0.20 -55 4], ...    % INTRINSICALLY BURSTING - IB
      [0.02 0.20 -50 2], ...    % CHATTERING - CH
      [0.10 0.20 -65 2], ...    % FAST SPIKING - FS
      [0.02 0.25 -65 0.05], ... % THALAMO-CORTICAL - TH
      [0.02 0.25 -65 2], ...    % LOW-THRESHOLD SPIKING - LTS
-     [0.10 0.26 -65 2]});      % RESONATOR - RZ
+     [0.10 0.26 -65 2], ...    % RESONATOR - RZ
+     [0.02 1.00 -55 4]});      % ACCOMODATING - AC
+% populations
+popE1 = 'RS'; popE2 = 'RS'; popI1 = 'FS'; popI2 = 'FS'; 
+popE1_params = neuron_type_map(popE1);
+popE2_params = neuron_type_map(popE2);
+popI1_params = neuron_type_map(popI1);
+popI2_params = neuron_type_map(popI2);
 
-popE = 'RS'; % Excitatory population
-popI = 'FS'; % Inhibitory population
-popE_params = neuron_type_map(popE); 
-popI_params = neuron_type_map(popI);
-a = [popE_params(1)*ones(Ne,1); popI_params(1)*ones(Ni,1)]; % recovery parameter
-b = [popE_params(2)*ones(Ne,1); popI_params(2)*ones(Ni,1)]; % recovery sensitivity
-c = [popE_params(3)*ones(Ne,1); popI_params(3)*ones(Ni,1)]; % recovery reset after a spike
-d = [popE_params(4)*ones(Ne,1); popI_params(4)*ones(Ni,1)]; % recovery reset after a spike
+% (a, b, c, d) parameters
+a = [popE1_params(1)*ones(Ne*0.8,1); popE2_params(1)*ones(Ne*0.2,1); ...
+     popI1_params(1)*ones(Ni*0.9,1); popI2_params(1)*ones(Ni*0.1,1)]; % recovery parameter
+b = [popE1_params(2)*ones(Ne*0.8,1); popE2_params(2)*ones(Ne*0.2,1); ...
+     popI1_params(2)*ones(Ni*0.9,1); popI2_params(2)*ones(Ni*0.1,1)]; % recovery sensitivity
+c = [popE1_params(3)*ones(Ne*0.8,1); popE2_params(3)*ones(Ne*0.2,1); ...
+     popI1_params(3)*ones(Ni*0.9,1); popI2_params(3)*ones(Ni*0.1,1)]; % recovery reset after a spike
+d = [popE1_params(4)*ones(Ne*0.8,1); popE2_params(4)*ones(Ne*0.2,1); ...
+     popI1_params(4)*ones(Ni*0.9,1); popI2_params(4)*ones(Ni*0.1,1)]; % recovery reset after a spike
 
 %% Synapses
 W = ones(N, M); % synaptic weights initialization
@@ -95,6 +103,7 @@ interval = 20;    % the coincidence interval for n1 and n2
 n1f = -D;         % the last spike of n1
 n2f = [];         % the last spike of n2
 shist = zeros(sec_ms*T,2); % synaptic strength
+DAv = zeros(sec_ms*T,1); % DA release
 
 %% Initializations
 v = -65 * ones(N, 1); % initial membrane potential - IZ
@@ -156,8 +165,51 @@ for sec = 1:T % simulation of 1 day
         end
         DA=DA*0.99; % dopamine decay
 
+        DAv(sec*sec_ms+t) = DA;
         shist((sec-1)*sec_ms+t,:)=[W(n1,syn),dW(n1,syn)];
     end
+
+    % ---- plot -------
+    % Spike rasterplot
+    excitatoryFirings = firings(firings(:,2) <= Ne, :);
+    inhibitoryFirings = firings(firings(:,2) > Ne, :);
+    subplot(3,2,[1 2],'Parent', hFig);
+    plot(excitatoryFirings(:,1), excitatoryFirings(:,2), '.', 'MarkerSize', 10, 'Color', colorE, 'DisplayName', 'Excitatory firings');
+    hold on;
+    plot(inhibitoryFirings(:,1), inhibitoryFirings(:,2), '.', 'MarkerSize', 10, 'Color', colorI, 'DisplayName', 'Inhibitory firings');
+    plot(firings(firings(:,2) == n1, 1), firings(firings(:,2) == n1, 2), 'k+', 'MarkerSize', 15, 'DisplayName', 'Pre-synaptic neuron'); % Mark neuron n1
+    plot(firings(firings(:,2) == n2, 1), firings(firings(:,2) == n2, 2), 'ks', 'MarkerSize', 15, 'DisplayName', 'Post-synaptic neuron'); % Mark neuron n2
+    hold off;
+    axis([0 sec_ms 0 N]);
+    xlabel('Time (ms)');
+    ylabel('Neurons'); 
+    legend('show', 'Location', 'northeastoutside');
+    % Synaptic strength, STDP trace, DA and rewards
+    subplot(3, 2, [5 6],'Parent', hFig);
+    plot(0.001*(1:(sec*sec_ms+t)), shist(1:sec*sec_ms+t, 1), 'b', 'DisplayName', 'Synaptic strength');
+    hold on;
+    plot(0.001*(1:(sec*sec_ms+t)), shist(1:sec*sec_ms+t, 2), 'g', 'DisplayName', 'STDP trace');
+    plot(0.001*(1:(sec*sec_ms+t)), DAv(1:sec*sec_ms+t), 'k', 'DisplayName', 'DA release');
+    plot(0.001*rew, 0*rew, 'rx', 'DisplayName', 'rewards', 'MarkerSize', 20);
+    hold off;
+    xlabel('Time (s)');
+    ylabel('Value');
+    legend('show', 'Location', 'northeastoutside');
+    % Synaptic weight distributions
+    subplot(3, 2, [3 4],'Parent', hFig);
+    histogram(signs(1:Ne, :) .* W(1:Ne, :), 'FaceColor', colorE, 'EdgeColor', colorE, 'DisplayName', 'Excitatory distribution'); % excitatory synapses
+    hold on;
+    histogram(signs(Ne+1:end, :) .* W(Ne+1:end, :), 'FaceColor', colorI, 'EdgeColor', colorI, 'DisplayName', 'Inhibitory distribution'); % inhibitory synapses
+    hold on;
+    plot(signs(n1,syn).*W(n1,syn), 0, 'b.', 'MarkerSize', 20, 'DisplayName', 'Reinforced synapse');
+    hold off;
+    xlabel('Synaptic weight');
+    ylabel('Count');
+    legend('show', 'Location', 'northeastoutside');
+    timeText = text(1.25, -1.5, sprintf('t = %d sec', sec), 'Units', 'normalized', 'HorizontalAlignment', 'right', 'FontSize', 12);    
+    drawnow;
+    % ---------------
+
 
     STDP(:, 1:D+1) = STDP(:, sec_ms+1:sec_ms+1+D);
     ind = find(firings(:, 1) > sec_ms + 1 - D);
