@@ -30,7 +30,7 @@ N = 1000; % number of neurons
 M = 100;  % number of synapses per neuron
 D = 5;    % maximal conduction delay
 % Time
-T = 3;        % simulation time (in seconds)
+T = 3600;        % simulation time (in seconds)
 sec_ms = 1000;   % (1s = 1000ms)
 
 %% Neuron populations
