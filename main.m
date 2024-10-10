@@ -49,22 +49,16 @@ neuron_type_map = containers.Map(...
      [0.02 0.25 -65 2], ...    % LOW-THRESHOLD SPIKING - LTS
      [0.10 0.26 -65 2], ...    % RESONATOR - RZ
      [0.02 1.00 -55 4]});      % ACCOMODATING - AC
-% populations
-popE1 = 'RS'; popE2 = 'RS'; popI1 = 'FS'; popI2 = 'FS'; 
-popE1_params = neuron_type_map(popE1);
-popE2_params = neuron_type_map(popE2);
-popI1_params = neuron_type_map(popI1);
-popI2_params = neuron_type_map(popI2);
 
+popE = 'RS'; % excitatory population
+popI = 'FS'; % inhibitory population
+popE_params = neuron_type_map(popE); 
+popI_params = neuron_type_map(popI);
 % (a, b, c, d) parameters
-a = [popE1_params(1)*ones(Ne*0.8,1); popE2_params(1)*ones(Ne*0.2,1); ...
-     popI1_params(1)*ones(Ni*0.9,1); popI2_params(1)*ones(Ni*0.1,1)]; % recovery parameter
-b = [popE1_params(2)*ones(Ne*0.8,1); popE2_params(2)*ones(Ne*0.2,1); ...
-     popI1_params(2)*ones(Ni*0.9,1); popI2_params(2)*ones(Ni*0.1,1)]; % recovery sensitivity
-c = [popE1_params(3)*ones(Ne*0.8,1); popE2_params(3)*ones(Ne*0.2,1); ...
-     popI1_params(3)*ones(Ni*0.9,1); popI2_params(3)*ones(Ni*0.1,1)]; % recovery reset after a spike
-d = [popE1_params(4)*ones(Ne*0.8,1); popE2_params(4)*ones(Ne*0.2,1); ...
-     popI1_params(4)*ones(Ni*0.9,1); popI2_params(4)*ones(Ni*0.1,1)]; % recovery reset after a spike
+a = [popE_params(1)*ones(Ne,1); popI_params(1)*ones(Ni,1)]; % recovery parameter
+b = [popE_params(2)*ones(Ne,1); popI_params(2)*ones(Ni,1)]; % recovery sensitivity
+c = [popE_params(3)*ones(Ne,1); popI_params(3)*ones(Ni,1)]; % recovery reset after a spike
+d = [popE_params(4)*ones(Ne,1); popI_params(4)*ones(Ni,1)]; % recovery reset after a spike
 
 %% Synapses
 W = ones(N, M); % synaptic weights initialization
@@ -84,7 +78,7 @@ for i=1:N
     else
         delays{i,1}=1:M; % fixed delay for inhibitory synapses
     end
-    pre{i}=find(post==i); % Both E and I pre-synaptic indexes
+    pre{i}=find(post==i); % both E and I pre-synaptic indexes
     aux{i}=N*(D-1-ceil(ceil(pre{i}/N)/(M/D)))+1+mod(pre{i}-1,N);
 end
 
@@ -117,7 +111,8 @@ learning_rule = 'DA-stdp'; % change this to 'stdp' for STDP learning rule
 for sec = 1:T % simulation of 1 day
     for t = 1:sec_ms % simulation of 1 sec
         I = 13*(rand(N, 1) - 0.5); % random thalamic input
-        fired = find(v >= 30); % indices of fired neurons
+
+        fired = find(v >= 30); % indices of fired neurons        
         v(fired) = c(fired);
         u(fired) = u(fired) + d(fired);
         STDP(fired, t+D) = 0.1;
@@ -166,7 +161,7 @@ for sec = 1:T % simulation of 1 day
         DA=DA*0.99; % dopamine decay
 
         DAv(sec*sec_ms+t) = DA;
-        shist((sec-1)*sec_ms+t,:)=[W(n1,syn),dW(n1,syn)];
+        shist(sec*sec_ms+t,:)=[W(n1,syn),dW(n1,syn)];
     end
 
     % ---- plot -------
@@ -217,5 +212,6 @@ for sec = 1:T % simulation of 1 day
     disp(sec); % display current second of simulation
 end
 
+% Save file
 filename = sprintf('shist_Epop%s_Ipop%s_%s_%s.mat', popE, popI, learning_rule, c_date_time);
 save(filename, 'shist');
