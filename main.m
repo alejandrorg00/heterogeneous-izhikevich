@@ -9,11 +9,6 @@
 % input and learning is driven by either STDP or DA-STDP. Synaptic 
 % plasticity is updated at each timestep, and dopamine levels adjust 
 % based on reward signals.
-% This work has been presented as a poster in the Bernstein Conference
-% 2024.
-% Citation: Rodriguez-Garcia A, Ramaswamy S (2024) Enhancing learning 
-% through neuromodulation-aware spiking neural networks. Bernstein 
-% Conference 2024. doi: 10.12751/nncn.bc2024.077 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% PARAMETERS
