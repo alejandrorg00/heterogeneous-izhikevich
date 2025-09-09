@@ -8,7 +8,7 @@ clear; clc; close all;
 seed0       = 2024;
 
 %% Simulation parameters
-pI_list = 0.00:0.01:0.50;   % inhibitory sweep
+pI_list = 0.00:0.05:0.50;   % inhibitory sweep
 N_total = 1000;             % total neurons
 T_sec   = 1;                % duration (s)
 dt_ms   = 1;                % time step (ms)
