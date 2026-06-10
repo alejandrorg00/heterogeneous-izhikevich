@@ -18,6 +18,14 @@ rng(seed);
 c_date_time = datestr(clock,'YYYY-mm-dd_HH-MM');
 hFig = figure('Position', [100, 100, 1200, 800], 'Visible', 'off');
 
+
+%% Proportions
+p_Exc = 0.5;      % fraction of total network that is excitatory
+p_Inh = 1-p_Exc;  % fraction of total network that is inhibitory
+p_excE1 = 1.0;    % fraction of excitatory population assigned to popE1
+p_excE2 = 1-p_excE1;
+p_inhFS = 0.9;    % fraction of inhibitory population assigned to FS
+p_inhAC = 0.1;  % fraction of inhibitory population assigned to AC
 %% Network definition
 
 % Simulation Parameters
@@ -25,13 +33,13 @@ N = 1000; % number of neurons
 M = 100;  % number of synapses per neuron
 D = 5;    % maximal conduction delay
 % Time
-T = 3;        % simulation time (in seconds)
+T = 3600;        % simulation time (in seconds)
 sec_ms = 1000;   % (1s = 1000ms)
 
 %% Neuron populations
 % Define excitatory and inhibitory neuron populations
-Ne = round(0.8*N); colorE = [1 0.7 0.4];  % 80% of neurons are excitatory (orange)
-Ni = N - Ne; colorI = [0.6 0.8 1]; % 20% of neurons are inhibitory (blue)
+Ne = round(p_Exc*N); colorE = [1 0.7 0.4];  % 50% of neurons are excitatory (orange)
+Ni = N - Ne; colorI = [0.6 0.8 1]; % 50% of neurons are inhibitory (blue)
 
 % Spiking types
 neuron_type_map = containers.Map(...
@@ -45,21 +53,21 @@ neuron_type_map = containers.Map(...
      [0.10 0.26 -65 2], ...    % RESONATOR - RZ
      [0.02 1.00 -55 4]});      % ACCOMODATING - AC
 % populations
-popE1 = 'RS'; popE2 = 'RS'; popI1 = 'FS'; popI2 = 'FS'; 
+popE1 = 'RS'; popE2 = 'IB'; popI1 = 'FS'; popI2 = 'AC'; 
 popE1_params = neuron_type_map(popE1);
 popE2_params = neuron_type_map(popE2);
 popI1_params = neuron_type_map(popI1);
 popI2_params = neuron_type_map(popI2);
 
 % (a, b, c, d) parameters
-a = [popE1_params(1)*ones(Ne*0.8,1); popE2_params(1)*ones(Ne*0.2,1); ...
-     popI1_params(1)*ones(Ni*0.9,1); popI2_params(1)*ones(Ni*0.1,1)]; % recovery parameter
-b = [popE1_params(2)*ones(Ne*0.8,1); popE2_params(2)*ones(Ne*0.2,1); ...
-     popI1_params(2)*ones(Ni*0.9,1); popI2_params(2)*ones(Ni*0.1,1)]; % recovery sensitivity
-c = [popE1_params(3)*ones(Ne*0.8,1); popE2_params(3)*ones(Ne*0.2,1); ...
-     popI1_params(3)*ones(Ni*0.9,1); popI2_params(3)*ones(Ni*0.1,1)]; % recovery reset after a spike
-d = [popE1_params(4)*ones(Ne*0.8,1); popE2_params(4)*ones(Ne*0.2,1); ...
-     popI1_params(4)*ones(Ni*0.9,1); popI2_params(4)*ones(Ni*0.1,1)]; % recovery reset after a spike
+a = [popE1_params(1)*ones(Ne*p_excE1,1); popE2_params(1)*ones(Ne*p_excE2,1); ...
+     popI1_params(1)*ones(Ni*p_inhFS,1); popI2_params(1)*ones(Ni*p_inhAC,1)]; % recovery parameter
+b = [popE1_params(2)*ones(Ne*p_excE1,1); popE2_params(2)*ones(Ne*p_excE2,1); ...
+     popI1_params(2)*ones(Ni*p_inhFS,1); popI2_params(2)*ones(Ni*p_inhAC,1)]; % recovery sensitivity
+c = [popE1_params(3)*ones(Ne*p_excE1,1); popE2_params(3)*ones(Ne*p_excE2,1); ...
+     popI1_params(3)*ones(Ni*p_inhFS,1); popI2_params(3)*ones(Ni*p_inhAC,1)]; % recovery reset after a spike
+d = [popE1_params(4)*ones(Ne*p_excE1,1); popE2_params(4)*ones(Ne*p_excE2,1); ...
+     popI1_params(4)*ones(Ni*p_inhFS,1); popI2_params(4)*ones(Ni*p_inhAC,1)]; % recovery reset after a spike
 
 %% Synapses
 W = ones(N, M); % synaptic weights initialization
@@ -214,5 +222,5 @@ for sec = 1:T % simulation of 1 day
 end
 
 % Save file
-filename = sprintf('shist_Epop%s_%s_Ipop%s_%s_%s_%s.mat', popE1, popE2, popI1, popI2, learning_rule, c_date_time);
+filename = sprintf('5050_RS_90FS_10_AC_%s_%s_Ipop%s_%s_%s_%s.mat', popE1, popE2, popI1, popI2, learning_rule, c_date_time);
 save(filename, 'shist');

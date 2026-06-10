@@ -1,0 +1,268 @@
+% Alejandro Rodriguez-Garcia
+% 20/05/24
+% Analysis of results for neural heterogeneity
+% Added: normalization [0,1], slope calculation, and plots ordered by FS/AC
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+close all; clear; clc;
+
+%% Define general parameters
+T = 3600;        % Number of sequences (1 hour)
+sec_ms = 1000;   % Milliseconds per second
+
+%% Plot 2: Compare second set of files
+%%%% Cortical proportion 80% E, 20% I
+% files2 = {'shist_EpopRS_RS_IpopFS_AC_DA-stdp_2024-10-18_13-47.mat', ...
+%           'new-shist_EpopRS_RS_IpopFS_AC_DA-stdp_2024-10-25_09-32.mat', ...
+%           'new73-shist_EpopRS_RS_IpopFS_AC_DA-stdp_2024-10-25_09-37.mat', ...
+%           'new37-shist_EpopRS_RS_IpopFS_AC_DA-stdp_2024-10-25_09-40.mat', ...
+%           'shist_EpopRS_RS_IpopFS_FS_DA-stdp_2024-10-18_13-24.mat', ...
+%           '05-shist_EpopRS_RS_IpopAC_AC_DA-stdp_2024-10-18_16-34.mat'};
+
+%%%% 5050 proportion 50% E, 50% I
+files2 = {'5050_RS_90FS_10_AC_RS_IB_IpopFS_AC_DA-stdp_2026-06-10_15-52.mat', ...
+          '5050_RS_50FS_50_AC_RS_IB_IpopFS_AC_DA-stdp_2026-06-10_15-52.mat', ...
+          '5050_RS_70FS_30_AC_RS_IB_IpopFS_AC_DA-stdp_2026-06-10_15-52.mat', ...
+          '5050_RS_30FS_70_AC_RS_IB_IpopFS_AC_DA-stdp_2026-06-10_15-52.mat', ...
+          '5050_RS_100FS_0_AC_RS_IB_IpopFS_AC_DA-stdp_2026-06-10_15-52.mat', ...
+          '5050_RS_0FS_100_AC_RS_IB_IpopFS_AC_DA-stdp_2026-06-10_15-52.mat'};
+
+labels2 = {'E:RS, I:0.9*FS/0.1*AC', ...
+           'E:RS, I:0.5*FS/0.5*AC', ...
+           'E:RS, I:0.7*FS/0.3*AC', ...
+           'E:RS, I:0.3*FS/0.7*AC', ...
+           'E:RS, I:FS', ...
+           'E:RS, I:AC'};
+
+colors2 = {[147, 112, 219]/255, ...       
+           [128, 0, 128]/255, ...       
+           [255, 140, 0]/255, ...       
+           [0, 163, 155]/255, ...       
+           [102, 153, 255]/255, ...     
+           [51, 51, 255]/255};
+
+% Load all data
+data_structs2 = cell(length(files2), 1);
+for i = 1:length(files2)
+    data_structs2{i} = load(files2{i});
+end
+
+% Arrays for results
+learning_rates2 = zeros(length(files2), 1);     % slope (normalized)
+fs_prop = zeros(length(files2), 1);             % FS proportion extracted from label
+fit_segments = cell(length(files2),1);          % segment used for linear fit
+fit_lines = cell(length(files2),1);             % corresponding fitted line
+
+% --- FIGURE 2: Normalized curves and "Task performance" ---
+figure(2); clf; hold on;
+for i = 1:length(files2)
+    shist_data = data_structs2{i}.shist;         % assumes column 1 is mean synaptic weight
+    y = shist_data(:,1);
+    t_full = (1:length(y))' * 0.001;             % seconds
+
+    % Min-max normalization to [0,1]
+    ymin = min(y);
+    ymax = max(y);
+    if ymax > ymin
+        y_norm = (y - ymin) / (ymax - ymin);
+    else
+        y_norm = zeros(size(y)); % constant trace
+    end
+
+    % Normalized plot
+    plot(t_full, y_norm, 'Color', colors2{i}, 'LineWidth', 2.2, 'DisplayName', labels2{i});
+end
+xlabel('Time (s)', 'FontSize', 12, 'FontWeight', 'bold', 'FontName', 'Arial');
+ylabel('Task performance', 'FontSize', 12, 'FontWeight', 'bold', 'FontName', 'Arial');
+legend('show', 'Location', 'northoutside', 'FontSize', 12, 'FontName', 'Arial', ...
+       'NumColumns', 3, 'Box', 'off');
+set(gca, 'FontSize', 14, 'LineWidth', 1.5, 'FontName', 'Arial');
+grid off; box on; hold off;
+
+% --- Slope calculation (on normalized data) and FS extraction ---
+for i = 1:length(files2)
+    shist_data = data_structs2{i}.shist;
+    y = shist_data(:,1);
+    t_full = (1:length(y))' * 0.001;   % seconds
+
+    % Min-max normalization
+    ymin = min(y); ymax = max(y);
+    if ymax > ymin
+        y_norm = (y - ymin) / (ymax - ymin);
+    else
+        y_norm = zeros(size(y));
+    end
+
+    % Cut index: up to first global maximum (first time reaching observed max)
+    [ymax_obs, ~] = max(y);
+    idx_end = find(y >= ymax_obs, 1, 'first');
+    if isempty(idx_end), idx_end = length(y); end
+
+    t_seg = t_full(1:idx_end);
+    y_seg = y_norm(1:idx_end);
+
+    % Linear fit (slope in normalized units per second)
+    p = polyfit(t_seg, y_seg, 1);
+    learning_rates2(i) = p(1);
+
+    % Save for visualization of segment and fitted line
+    fit_segments{i} = struct('t', t_seg, 'y', y_seg);
+    fit_lines{i} = polyval(p, t_seg);
+
+    % Extract FS proportion from label (if "I:FS" => 1, "I:AC" => 0)
+    lbl = labels2{i};
+    % Direct cases
+    if contains(lbl, 'I:FS')
+        fs_prop(i) = 1.0;
+    elseif contains(lbl, 'I:AC')
+        fs_prop(i) = 0.0;
+    else
+        % Look for pattern "a*FS/b*AC"
+        tok = regexp(lbl, '([\d\.]+)\*FS/([\d\.]+)\*AC', 'tokens', 'once');
+        if ~isempty(tok)
+            fs_prop(i) = str2double(tok{1}) / (str2double(tok{1}) + str2double(tok{2}));
+        else
+            % Fallback if not identified
+            fs_prop(i) = NaN;
+        end
+    end
+end
+
+% Print slopes to console
+for i = 1:length(files2)
+    fprintf('Learning rate (norm)  %-28s : %.6f  [FS=%.2f]\n', labels2{i}, learning_rates2(i), fs_prop(i));
+end
+
+%% --- FIGURE 3: Linear fits of segments (extended up to 3600s) ---
+figure(3); clf; hold on;
+x_end = 3600;   % right limit of X axis (seconds)
+for i = 1:length(files2)
+    seg = fit_segments{i};
+    p = polyfit(seg.t, seg.y, 1);    % fitted line
+    t_ext = linspace(0, x_end, 200); % extend up to 3600 s
+    y_ext = polyval(p, t_ext);
+    plot(t_ext, y_ext, '-', 'Color', colors2{i}, 'LineWidth', 2.2, ...
+         'DisplayName', labels2{i});
+end
+xlabel('Time (s)', 'FontSize', 12, 'FontWeight', 'bold', 'FontName', 'Arial');
+ylabel('Task performance', 'FontSize', 12, 'FontWeight', 'bold', 'FontName', 'Arial');
+title('Linear fits extended to 3600s', 'FontSize', 14, 'FontName', 'Arial');
+legend('show', 'Location', 'northoutside', 'NumColumns', 3, 'Box', 'off');
+set(gca, 'FontSize', 14, 'LineWidth', 1.5, 'FontName', 'Arial', ...
+         'XLim', [0 3600], 'YLim', [0 1]);   % fixed axes
+grid off; box on; hold off;
+
+
+
+%% --- FIGURE 4: Slopes ordered by FS proportion (scatter + lines) ---
+[fs_sorted, idx_sort] = sort(fs_prop, 'ascend', 'MissingPlacement', 'last');
+rates_sorted = learning_rates2(idx_sort);
+labels_sorted = labels2(idx_sort);
+
+figure(4); clf; hold on;
+
+% Plot with red line/edges and coral-filled markers
+plot(fs_sorted, rates_sorted, '-o', ...
+     'LineWidth', 2, ...
+     'MarkerSize', 8, ...
+     'Color', 'r', ...                    % red line + marker edge
+     'MarkerFaceColor', [1.0 0.5 0.31]);  % coral (marker inside)
+
+% Axis aesthetics
+set(gca, 'FontSize', 12, 'LineWidth', 1.2, 'FontName', 'Arial', ...
+         'Box', 'off', 'TickDir', 'out');
+
+% Labels
+xlabel('Neuron type proportion (AC → FS)', ...
+       'FontSize', 14, 'FontWeight', 'bold', 'FontName', 'Arial');
+ylabel('Learning rate (1 / s)', ...
+       'FontSize', 14, 'FontWeight', 'bold', 'FontName', 'Arial');
+
+grid off;
+hold off;
+
+% Export 
+print(gcf, '5050_lerning_rate', '-depsc', '-r300');  % EPS
+print(gcf, 'lerning_rate', '-dpdf',  '-r300');  % PDF
+print(gcf, 'lerning_rate', '-dsvg',  '-r300');  % SVG (MATLAB R2020a+) 
+
+%% --- COMBINED FIGURE: Subplots with normalized data and linear fits (global legend) ---
+figure('Color','w'); clf;
+set(gcf, 'Units','pixels', 'Position',[100 100 1200 560], 'PaperPositionMode','auto');
+
+% Layout reducido en altura para dejar sitio a la leyenda
+t = tiledlayout(1,2, 'TileSpacing','compact', 'Padding','compact');
+t.TileSpacing = 'compact';
+t.Padding = 'compact';
+t.InnerPosition(2) = 0.15;    % sube el borde inferior del layout
+t.InnerPosition(4) = 0.70;    % reduce la altura ocupada por los subplots
+
+% --- Subplot 1: Normalized curves ---
+ax1 = nexttile(1); hold(ax1,'on');
+hLines = gobjects(length(files2),1);
+for i = 1:length(files2)
+    shist_data = data_structs2{i}.shist;
+    y = shist_data(:,1);
+    t_full = (1:length(y))' * 0.001;   % seconds
+
+    % Min-max normalization
+    ymin = min(y); ymax = max(y);
+    if ymax > ymin
+        y_norm = (y - ymin) / (ymax - ymin);
+    else
+        y_norm = zeros(size(y));
+    end
+
+    hLines(i) = plot(ax1, t_full, y_norm, 'Color', colors2{i}, ...
+        'LineWidth', 2.2, 'DisplayName', labels2{i});
+end
+xlabel(ax1,'Time (s)', 'FontSize', 12, 'FontWeight', 'bold', 'FontName', 'Arial');
+ylabel(ax1,'Task performance', 'FontSize', 12, 'FontWeight', 'bold', 'FontName', 'Arial');
+set(ax1,'FontSize',12,'LineWidth',1.2,'FontName','Arial','XLim',[0 3600],'YLim',[0 1],'Box','off');
+grid(ax1,'off'); hold(ax1,'off');
+
+% --- Subplot 2: Linear fits (0 -> primer máximo) ---
+ax2 = nexttile(2); hold(ax2,'on');
+x_end = 3600;
+for i = 1:length(files2)
+    seg = fit_segments{i};
+    p = polyfit(seg.t, seg.y, 1);
+    t_ext = linspace(0, x_end, 200);
+    y_ext = polyval(p, t_ext);
+    plot(ax2, t_ext, y_ext, '-', 'Color', colors2{i}, 'LineWidth', 2.2);
+end
+set(ax2,'FontSize',12,'LineWidth',1.2,'FontName','Arial','XLim',[0 3600],'YLim',[0 1],'TickDir','out','Box','off');
+xlabel(ax2,'Time (s)', 'FontSize', 14, 'FontWeight', 'bold', 'FontName', 'Arial');
+ylabel(ax2,'Task performance', 'FontSize', 14, 'FontWeight', 'bold', 'FontName', 'Arial');
+title(ax2,'Linear fits', 'FontSize', 14, 'FontName', 'Arial');
+grid(ax2,'off'); hold(ax2,'off');
+
+% --- Leyenda global (compatibilidad total): eje invisible + centrado con padding ---
+legAx = axes('Parent', gcf, 'Position', [0 0 1 1], 'Visible','off', 'Units','normalized');
+lgd = legend(legAx, hLines, labels2, 'Orientation','horizontal', ...
+             'Box','off', 'FontSize',14, 'FontName','Arial');
+try
+    lgd.NumColumns = min(3, numel(hLines));  % ajusta columnas si quieres
+end
+lgd.Units = 'normalized';
+pos = lgd.Position;          % [x y w h]
+pos(2) = 0.9;               % padding vertical (sube la leyenda)
+pos(1) = 0.5 - pos(3)/2;     % centrado horizontal exacto
+lgd.Position = pos;
+
+% --- Export ---
+print(gcf, 'task_performance', '-depsc', '-r300');
+print(gcf, 'task_performance', '-dsvg',  '-r300');
+print(gcf, 'task_performance', '-dpdf',  '-bestfit');
+
+
+%% --- Helper: compact labels "FS=0.30 | label"
+function L = compactLabels(lbls, fsvals)
+    L = cell(size(lbls));
+    for k = 1:numel(lbls)
+        if isnan(fsvals(k))
+            L{k} = sprintf('FS=? | %s', lbls{k});
+        else
+            L{k} = sprintf('FS=%.2f | %s', fsvals(k), lbls{k});
+        end
+    end
+end
